@@ -1,0 +1,197 @@
+---
+title: "01_mini_project_maps"
+sidebar: false
+format:
+  html: default
+editor_options: 
+  chunk_output_type: console
+---
+
+This project features 2 maps (a static and interactive version) that display data from the Centers for Disease Control and Prevention (CDC). Data on Covid-19 levels was collected from February 2022 to May 2023 on a county level. For the purposes of this state-level project, I will use the average of county-level data for each state to display Covid-19 cases per 100k. Data can be accessed at https://data.cdc.gov/Public-Health-Surveillance/United-States-COVID-19-Community-Levels-by-County/3nnm-4jni/about_data. 
+
+```{r}
+library(tidyverse)
+library(mdsr)
+library(maps)
+library(viridis)
+library(lubridate)
+library(leaflet)
+library(sf)
+library(RColorBrewer)
+
+#data set from the CDC
+covid_data <- read.csv("~/Downloads/01_United_States_COVID-19_Community_Levels_by_County_20250216.csv")
+```
+
+```{r}
+states_polygon <- as_tibble(map_data("state")) |>
+  select(region, group, order, lat, long)
+
+states_sf <- read_sf("https://rstudio.github.io/leaflet/json/us-states.geojson") |>
+  select(name, geometry)
+```
+
+```{r}
+#convert county-level data to state-level data
+covid_tibble <- covid_data |>
+  filter(covid_cases_per_100k != "NA", 
+         health_service_area_population != "NA", 
+         covid_hospital_admissions_per_100k != "NA") |>
+  group_by(state) |>
+  summarize(covid_cases_per_100k = mean(covid_cases_per_100k),
+            population = sum(health_service_area_population),
+            covid_hospital_admin_per_100k = mean(covid_hospital_admissions_per_100k))
+```
+
+```{r}
+#format state names in all data sets so they match 
+covid_tibble <- covid_tibble |>
+  mutate(state = str_to_lower(state),
+         state = str_replace_all(state, " ", ""),
+         state = str_squish(state))
+
+states_sf <- states_sf |>
+  mutate(name = str_to_lower(name),
+         name = str_replace_all(name, " ", ""))
+
+states_polygon <- states_polygon|>
+  mutate(region = str_replace_all(region, " ", ""))
+```
+
+```{r}
+#join covid data with map data
+covid_map <- covid_tibble |>
+  right_join(states_polygon, by =c("state" = "region"))
+
+covid_map2 <- covid_map |>
+  right_join(states_sf, by =c("state" = "name"))
+```
+
+Static Map #1
+
+```{r}
+covid_map2 |>
+  ggplot(mapping = aes(x = long, y = lat,
+                       group = group)) +
+  geom_polygon(aes(fill = covid_cases_per_100k), color = "white", linewidth = 0.2) +
+  labs(fill = "Average Covid Cases \nin Per 100k",
+       x = "",
+       y = "") +
+  coord_map() +
+  theme_void() +
+  scale_fill_viridis(option = "mako", direction = -1)
+```
+
+Interactive Map #1
+
+```{r}
+states <- read_sf("https://rstudio.github.io/leaflet/json/us-states.geojson") 
+class(states) 
+
+states <- states |>
+  mutate(name = str_to_lower(name),
+         name = str_replace_all(name, " ", ""))
+```
+
+```{r}
+#join covid data with state plotting data
+state_plotting_covid <- covid_tibble |>
+  right_join(states, by = c("state" = "name"))
+
+#breaks for interactive map
+state_plotting_covid_sf <- state_plotting_covid |>
+  mutate(covid_intervals = cut(covid_cases_per_100k, n = 8,
+          breaks = c(0, 20, 40, 60, 80, 100, 120, 140, Inf))) |>
+  filter(!(state %in% c("alaska", "hawaii", "puerto rico")))
+
+#base map for interactive map
+ggplot(data = state_plotting_sf) + 
+  geom_sf(aes(geometry = geometry, fill = covid_intervals), colour = "white", linetype = 2) + 
+  theme_void() +  
+  scale_fill_brewer(palette = "BuGn") 
+```
+
+```{r}
+bins <- c(0, 20, 40, 60, 80, 100, 120, 140, Inf)
+pal <- colorBin("BuGn", domain = states$covid_cases_per_100k, bins = bins)
+
+library(htmltools)
+library(glue)
+
+str(state_plotting_covid_sf$covid_cases_per_100k)
+
+#add labels to the state_plotting_covid_sf
+states_plotting_sf_labels <- state_plotting_sf |>
+  mutate(labels = str_c(state, ": ", format(round(covid_cases_per_100k, 1)), " cases / 100k people"))
+
+labels <- lapply(state_plotting_sf2$labels, HTML)
+
+state_plotting_covid_sf <- st_as_sf(state_plotting_covid_sf)
+
+leaflet(state_plotting_covid_sf) |>
+  setView(-100, 35, 3.3) |> #to view the united states
+  addTiles() |>
+  addPolygons(
+    fillColor = ~pal(covid_cases_per_100k),
+    weight = 1,
+    opacity = 2,
+    color = "white",
+    dashArray = "3",
+    fillOpacity = 0.7,
+    highlightOptions = highlightOptions(
+      weight = 2,
+      color = "#666",
+      dashArray = "",
+      fillOpacity = 0.7,
+      bringToFront = TRUE),
+    label = labels,
+    labelOptions = labelOptions(
+      style = list("font-weight" = "normal", padding = "3px 8px"),
+      textsize = "15px",
+      direction = "auto")) |>
+  addLegend(pal = pal, values = ~covid_cases_per_100k, opacity = 0.7, title = NULL,
+    position = "bottomright")
+```
+
+Static Map #2
+
+```{r}
+county_map <- map_data("county") |>
+  mutate(subregion = str_to_lower(subregion),
+         subregion = str_replace_all(subregion, " ", ""),
+         subregion = str_squish(subregion)) |>
+  mutate(region = str_to_lower(region),
+         region = str_replace_all(region, " ", ""))
+
+#fixing odd formating for county names in CDC data
+covid_data1 <- covid_data |>
+  select(county, state, covid.19_community_level, covid_cases_per_100k) |>
+  mutate(state = str_to_lower(state),
+         state = str_replace_all(state, " ", ""),
+         state = str_squish(state)) |>
+  mutate(county = str_to_lower(county),
+         county = str_replace_all(county, " ", ""),
+         county = str_squish(county),
+         county = str_replace_all(county, "county", ""),
+         county = str_replace_all(county, "st.", ""),
+         county = str_replace_all(county, "city", ""),
+         county = str_replace_all(county, "muni", ""),
+         county = str_replace_all(county, "parish", "")) |>
+  filter(state != c("puertorico", "unitedstatesvirginislands", "alaska", "hawaii"))
+
+covid_data2 <- covid_data1 |>
+  right_join(county_map, by =c("county" = "subregion", "state" = "region"))
+  
+covid_data2 |>
+  ggplot(mapping = aes(x = long, y = lat,
+                       group = group)) +
+  geom_polygon(aes(fill = covid.19_community_level), color = "white", linewidth = 0.05) +
+  labs(fill = "COVID-19 Levels \n Per County",
+       x = "",
+       y = "") +
+  scale_fill_manual(values = c("High" = "darkred", "Medium" = "gold", "Low" = "darkgreen", "NA" = "gray")) +
+  coord_map() +
+  theme_void() 
+```
+
+
