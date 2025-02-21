@@ -12,6 +12,8 @@ This project features three maps (a static and interactive version of the same v
 
 Additionally, this project contains two maps (a static and interactive version) that display the 2024 Presidential Election results. Election data is from the Federal Election Commission (FEC) and can be found at [this link](https://www.fec.gov/introduction-campaign-finance/election-results-and-voting-information/). 
 
+The interactive maps in this project can be found [here](https://github.com/solveigsenf/SDS264/blob/main/01_mini_project_interactive_maps.html) (I think...).
+
 ```{r}
 library(tidyverse)
 library(mdsr)
