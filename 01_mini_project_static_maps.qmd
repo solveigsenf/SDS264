@@ -8,7 +8,7 @@ editor_options:
   chunk_output_type: console
 ---
 
-This project features three maps (a static and interactive version of the same variable and a single static map of different variable) that display data from the Centers for Disease Control and Prevention (CDC). Data on Covid-19 levels was collected from February 2022 to May 2023 on a county level. This project displays data recorded on May 11, 2023. For the purposes of this state-level project, I will use the average of county-level data for each state to display Covid-19 cases per 100k. Data can be accessed [here](https://data.cdc.gov/Public-Health-Surveillance/United-States-COVID-19-Community-Levels-by-County/3nnm-4jni/about_data). 
+This project features two maps (a static and interactive version) that display data from the Centers for Disease Control and Prevention (CDC). Data on Covid-19 levels was collected from February 2022 to May 2023 on a county level. This project displays data recorded on May 11, 2023. For the purposes of this state-level project, I will use the average of county-level data for each state to display the new Covid-19 cases per 100k within the previous 7 days. Data can be accessed [here](https://data.cdc.gov/Public-Health-Surveillance/United-States-COVID-19-Community-Levels-by-County/3nnm-4jni/about_data). 
 
 Additionally, this project contains two maps (a static and interactive version) that display the 2024 Presidential Election results. Election data is from the Federal Election Commission (FEC) and can be found at [this link](https://www.fec.gov/introduction-campaign-finance/election-results-and-voting-information/). 
 
@@ -84,7 +84,10 @@ covid_map <- covid_map |>
 
 Static Map #1
 
-```{r}
+This is map of the continental United States that shows the average 7 day total of new COVID-19 cases per 100,000 people in each state. Data was collected on May 11, 2023 and the average number of new COVID-19 cases ranges from just above 0 to about 60 per 100,000 people. The lowest COVID-19 levels are shown in light blue and the highest are shown in dark, deep blue. Overall, most of the United States had extremely low levels of average new COVID-19 cases on May 11. North Dakota and Arizona, however, had the highest levles at about 60 cases per 100k people.
+
+```{r, fig.alt = "This is map of the continental United States that shows the average 7 day total of new COVID-19 cases per 100,000 people in each state. Data was collected on May 11, 2023 and the average number of new COVID-19 cases ranges from just above 0 to about 60 per 100,000 people. The lowest COVID-19 levels are shown in light blue and the highest are shown in dark, deep blue. Overall, most of the United States had extremely low levels of average new COVID-19 cases on May 11. North Dakota and Arizona, however, had the highest levles at about 60 cases per 100k people."}
+
 covid_map |>
   ggplot(mapping = aes(x = long, y = lat,
                        group = group)) +
@@ -99,52 +102,11 @@ covid_map |>
   scale_fill_viridis(option = "mako", direction = -1)
 ```
 
-Static Map #2
-
-```{r}
-county_map <- map_data("county") |>
-  mutate(subregion = str_to_lower(subregion),
-         subregion = str_replace_all(subregion, " ", ""),
-         subregion = str_squish(subregion)) |>
-  mutate(region = str_to_lower(region),
-         region = str_replace_all(region, " ", ""))
-
-#fixing odd formating for county names in CDC data
-covid_data_clean <- covid_data |>
-  select(county, state, covid.19_community_level, covid_cases_per_100k) |>
-  mutate(state = str_to_lower(state),
-         state = str_replace_all(state, " ", ""),
-         state = str_squish(state)) |>
-  mutate(county = str_to_lower(county),
-         county = str_replace_all(county, " ", ""),
-         county = str_squish(county),
-         county = str_replace_all(county, "county", ""),
-         county = str_replace_all(county, "st.", ""),
-         county = str_replace_all(county, "city", ""),
-         county = str_replace_all(county, "muni", ""),
-         county = str_replace_all(county, "parish", ""))
-
-covid_county_level_data <- covid_data_clean |>
-  right_join(county_map, by =c("county" = "subregion", "state" = "region")) |>
-  mutate(covid.19_community_level = fct_relevel(covid.19_community_level, "High", "Medium", "Low"))
-
-covid_county_level_data |>
-  ggplot(mapping = aes(x = long, y = lat,
-                       group = group)) +
-  geom_polygon(aes(fill = covid.19_community_level), color = "white", linewidth = 0.05) +
-  labs(fill = "Covid Level",
-       x = "",
-       y = "",
-       title = "COVID-19 Levels In Each County",
-       subtitle = "As of May 11, 2023") +
-  scale_fill_manual(values = c("High" = "darkred", "Medium" = "gold", "Low" = "darkgreen", "NA" = "gray")) +
-  coord_map() +
-  theme_void() 
-```
-
 Election Data
 
-Static Map #3
+Static Map #2
+
+This map of the continental United States shows Electoral College Results from the 2024 Presidential Election. States in which Electoral College votes were awarded to Donald Trump are colored in red and states in which Electoral College votes were awarded to Kamala Harris are colored in blue. Also to note, Maine and Nebraska split Electoral College votes to match the popular vote, so these states are colored by the candidate who won the majority Electoral College votes. As we can see, Donald Trump revived Electoral College votes from many more states than Kamala Harris, who won the majority of coastal states. It is important to note that this map only represents Electoral College votes, so the closeness of the election can not be determined simply by counting the number of states awarded to each candidate. 
 
 ```{r}
 #data from the federal election commission
@@ -181,7 +143,7 @@ electoral_map <- electoral_map |>
   right_join(states_sf, by =c("state" = "name"))
 ```
 
-```{r}
+```{r, fig.alt = "This map of the continental United States shows Electoral College Results from the 2024 Presidential Election. States in which Electoral College votes were awarded to Donald Trump are colored in red and states in which Electoral College votes were awarded to Kamala Harris are colored in blue. Also to note, Maine and Nebraska split Electoral College votes to match the popular vote, so these states are colored by the candidate who won the majority Electoral College votes. As we can see, Donald Trump revived Electoral College votes from many more states than Kamala Harris, who won the majority of coastal states. It is important to note that this map only represents Electoral College votes, so the closeness of the election can not be determined simply by counting the number of states awarded to each candidate."}
 electoral_map |>
   ggplot(mapping = aes(x = long, y = lat,
                        group = group)) +

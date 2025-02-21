@@ -8,7 +8,7 @@ editor_options:
   chunk_output_type: console
 ---
 
-This project features three maps (a static and interactive version of the same variable and a single static map of different variable) that display data from the Centers for Disease Control and Prevention (CDC). Data on Covid-19 levels was collected from February 2022 to May 2023 on a county level. This project displays data recorded on May 11, 2023. For the purposes of this state-level project, I will use the average of county-level data for each state to display Covid-19 cases per 100k. Data can be accessed [here](https://data.cdc.gov/Public-Health-Surveillance/United-States-COVID-19-Community-Levels-by-County/3nnm-4jni/about_data). 
+This project features two maps (a static and interactive version) that display data from the Centers for Disease Control and Prevention (CDC). Data on Covid-19 levels was collected from February 2022 to May 2023 on a county level. This project displays data recorded on May 11, 2023. For the purposes of this state-level project, I will use the average of county-level data for each state to display the new Covid-19 cases per 100k within the previous 7 days. Data can be accessed [here](https://data.cdc.gov/Public-Health-Surveillance/United-States-COVID-19-Community-Levels-by-County/3nnm-4jni/about_data). 
 
 Additionally, this project contains two maps (a static and interactive version) that display the 2024 Presidential Election results. Election data is from the Federal Election Commission (FEC) and can be found at [this link](https://www.fec.gov/introduction-campaign-finance/election-results-and-voting-information/). 
 
@@ -92,7 +92,7 @@ states <- states |>
 state_plotting_covid <- covid_state_level_data |>
   right_join(states, by = c("state" = "name"))
 
-#breaks for interactive map
+#bins for interactive map
 state_plotting_covid_sf <- state_plotting_covid |>
   mutate(covid_intervals = cut(covid_cases_per_100k, n = 8,
           breaks = c(0, 10, 20, 30, 40, 50, 60, 70, Inf))) |>
@@ -155,6 +155,7 @@ Interactive Map #2
 #data from the federal election commission
 election_data <- read.csv("~/Downloads/2024presgeresults.csv")
 
+#tidy data so it can be used to plot
 election_data <- election_data |>
   select(STATE, ELECTORAL.VOTE..TRUMP..R., ELECTORAL.VOTE..HARRIS..D., HARRIS, TRUMP) |>
   rename(state = STATE, 
@@ -190,7 +191,7 @@ election_map_sf <- election_data |>
 
 ggplot(data = election_map_sf) + 
   geom_sf(aes(geometry = geometry, fill = candidate_won), colour = "white", linetype = 2) + 
-  scale_fill_manual(values = c("Harris" = "darkblue", "Trump" = "darkred")) +
+  scale_fill_manual(values = c("Harris" = "darkblue", "Trump" = "darkred")) + 
   labs(fill = "Winning Candidate") +
   theme_void() 
 ```
