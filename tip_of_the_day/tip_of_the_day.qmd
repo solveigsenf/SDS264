@@ -1,0 +1,141 @@
+---
+title: "tip_of_the_day_slides"
+format:
+  pdf: default
+editor_options: 
+  chunk_output_type: console
+---
+```{r}
+library(emojifont)
+library(palmerpenguins)
+library(ggplot2)
+library(tidyverse)
+library(dplyr)
+
+penguins <- penguins
+```
+
+```{r}
+emoji(search_emoji('penguin'))
+
+emoji(search_emoji("heart"))
+
+search_emoji('heart')
+
+paste0("Hi ", emoji("smile"), "!")
+```
+
+```{r}
+penguins_adelie <- penguins |>
+  filter(species == "Adelie") |>
+  mutate(label = emoji("penguin"),
+         type = sex)
+
+penguins_adelie |>
+ggplot(aes(x = body_mass_g, y = flipper_length_mm)) +
+  geom_text(aes(color = type, label = label), family = "EmojiOne", size = 6) +
+  geom_smooth(method = lm, se = FALSE, size = 0.2, color = "black") +
+  scale_color_manual(values = c("female" = "pink", "male" = "blue", "NA" = "black")) +
+  labs(title = "As body mass increases, \nflipper length also increases",
+       subtitle = paste0("For Adelie penguins"),
+       x = "Body Mass",
+       y = "Flipper Length",
+       color = "Sex") +
+  theme_classic() +
+  theme(legend.position = "none")
+```
+
+```{r}
+library(tidytext)
+library(janeaustenr)
+
+all_austen <- austen_books() |>
+  group_by(book) |>
+  mutate(
+    linenumber = row_number(),
+    chapter = cumsum(str_detect(text, 
+                                regex("^chapter [\\divxlc]", 
+                                      ignore_case = TRUE)))) |>
+  ungroup()
+
+all_austen
+```
+
+```{r}
+tidy_austen <- all_austen |>
+  unnest_tokens(output = "word", input = text) |>
+  filter(chapter > 0)
+
+emma_words <- tidy_austen |>
+  anti_join(stop_words, by = c("word" = "word")) |>
+  count(book, word, name = "freq") |>
+  filter(book == "Emma") |>
+  slice_max(order_by = freq, n = 200, with_ties = FALSE) |>
+  mutate(freq = as.numeric(freq),
+         freq = freq/10) |>
+  rename("words" = "word") |>
+  select(-book)
+```
+
+```{r}
+library(wordcloud)
+library(RColorBrewer)
+
+str(emma_words)
+
+par(bg = "white")
+
+with(emma_words, wordcloud(words = words, 
+                               freq = freq, 
+                               max.words = 100, 
+                               min.freq = 0.5,
+                               scale = c(2, .5), 
+                               random.order = FALSE,
+                               colors = brewer.pal(12, "Paired")
+                               ))
+
+brewer.pal.info <- brewer.pal.info
+```
+
+```{r}
+library(wordcloud)
+library(RColorBrewer)
+
+str(emma_words)
+
+par(bg = "black")
+
+with(emma_words, wordcloud(words = words, 
+                               freq = freq, 
+                               max.words = 50, 
+                               min.freq = 0.5,
+                               scale = c(3, 1), 
+                               random.order = FALSE,
+                               colors = brewer.pal(12, "Set3")
+                               ))
+```
+
+```{r}
+require(devtools)
+install_github("lchiffon/wordcloud2")
+
+library(wordcloud2)
+
+wordcloud2(data = emma_words,
+           color = "random-dark")
+
+wordcloud2(data = emma_words, 
+           fontFamily = "Futura", 
+           color = "random-light",
+           backgroundColor = "navy",
+           shape = 'star')
+```
+
+```{r}
+figPath <- "/Users/bethsenf/Downloads/opened-book-3163 (1).png"
+
+letterCloud(emma_words, word = "EMMA", size = 0.75)
+
+file.exists(figPath)
+```
+
