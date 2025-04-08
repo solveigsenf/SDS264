@@ -1,0 +1,717 @@
+---
+title: "03 Homework"
+format:
+  pdf: default
+editor_options: 
+  chunk_output_type: console
+---
+#07 APIs
+
+```{r}
+#| include: FALSE
+
+library(tidyverse)
+library(stringr)
+library(httr2)
+library(httr)
+```
+
+### On Your Own
+
+1. Write a for loop to obtain the Hennepin County data from 2017-2021
+
+```{r}
+CENSUS_API_KEY <- Sys.getenv("eb0aeda0fdc5189fd15ef2b9016afddfafd4397b")
+
+years <- c("2017", "2018", "2019", "2020", "2021")
+
+output <- list()
+for (i in years) {
+  url <- str_c("https://api.census.gov/data/", i, "/acs/acs5?get=NAME,B01003_001E,B19013_001E&for=tract:*&in=state:27&in=county:053", "&key=", CENSUS_API_KEY)
+acs5 <- GET(url)
+details <- content(acs5, "parsed")
+var_names <- details[[1]]  # variable names
+length <- length(details)
+
+name <- character()
+population <- double()
+median_income <- double()
+tract <- character()
+
+for(j in 2:length) {
+  name[j-1] <- details[[j]][1]
+  population[j-1] <- details[[j]][2]
+  median_income[j-1] <- details[[j]][3]
+  tract[j-1] <- details[[j]][6]
+}
+
+hennepin_httr <- tibble(
+  name = name,
+  population = population,
+  median_income = median_income,
+  tract = tract,
+  year = i
+)
+
+output[[i]] <- hennepin_httr
+}
+
+hennepin_data <- list_rbind(output)
+
+```
+
+2. Write a function to give choices about year, county, and variables
+
+```{r}
+census_data <- function(year, county, variables) {
+  
+  variables_str <- str_c(variables, collapse = ",")
+  
+  url <- str_c("https://api.census.gov/data/", year, "/acs/acs5?get=", variables_str, "&for=tract:*&in=state:27&in=county:", county, "&key=", CENSUS_API_KEY)
+  
+  acs5 <- GET(url)
+  details <- content(acs5, "parsed")
+  var_names <- details[[1]]
+  length <- length(details)
+  
+  name <- character()
+  population <- double()
+  median_income <- double()
+  tract <- character()
+  
+  for(j in 2:length) {
+    name[j-1] <- details[[j]][1]
+    population[j-1] <- details[[j]][2]
+    median_income[j-1] <- details[[j]][3]
+    tract[j-1] <- details[[j]][6]
+    }
+  
+  hennepin_httr <- tibble(
+    name = name,
+    population = population,
+    median_income = median_income,
+    tract = tract,
+    year = year
+    )
+}
+
+variables <- c("NAME", "B01003_001E", "B19013_001E")
+
+hen_data <- census_data(year = "2019", county = "053", variables = variables)
+rice_data <- census_data(year = "2019", county = "123", variables = variables)
+```
+
+3. Use your function from (2) along with `map` and `list_rbind` to build a data set for Rice county for the years 2019-2021
+```{r}
+year <- 2019:2021
+
+county <- c("123", "123", "123")
+
+variables <- c("NAME", "B01003_001E", "B19013_001E")
+
+rice_data <- map2(year, county, ~ census_data(year = .x, county = .y, variables = variables)) |>
+  list_rbind()
+```
+
+
+### One more example using an API key
+
+Here's an example of getting data from a website that attempts to make imdb movie data available as an API.
+
+Initial instructions:
+
+- go to omdbapi.com under the API Key tab and request a free API key
+- store your key as discussed earlier
+- explore the examples at omdbapi.com
+
+We will first obtain data about the movie Coco from 2017.
+
+```{r}
+#| eval: FALSE
+
+# I used the first line to store my OMDB API key in .Renviron
+ Sys.setenv(OMDB_KEY = "aa9474b0")
+myapikey <- Sys.getenv("OMDB_KEY")
+
+# Find url exploring examples at omdbapi.com
+url <- str_c("http://www.omdbapi.com/?t=Coco&y=2017&apikey=", myapikey)
+
+coco <- GET(url)   # coco holds response from server
+coco               # Status of 200 is good!
+
+details <- content(coco, "parse")   
+details                         # get a list of 25 pieces of information
+details$Year                    # how to access details
+details[[2]]                    # since a list, another way to access
+```
+
+Now build a data set for a collection of movies
+
+```{r}
+#| message: FALSE
+#| eval: FALSE
+
+# Must figure out pattern in URL for obtaining different movies
+#  - try searching for others
+movies <- c("Coco", "Wonder+Woman", "Get+Out", 
+            "The+Greatest+Showman", "Thor:+Ragnarok")
+
+# Set up empty tibble
+omdb <- tibble(Title = character(), Rated = character(), Genre = character(),
+       Actors = character(), Metascore = double(), imdbRating = double(),
+       BoxOffice = double())
+
+# Use for loop to run through API request process 5 times,
+#   each time filling the next row in the tibble
+#  - can do max of 1000 GETs per day
+for(i in 1:5) {
+  url <- str_c("http://www.omdbapi.com/?t=",movies[i],
+               "&apikey=", myapikey)
+  Sys.sleep(0.5) #adds space between requests so api doesn't get mad
+  onemovie <- GET(url)
+  details <- content(onemovie, "parse")
+  omdb[i,1] <- details$Title
+  omdb[i,2] <- details$Rated
+  omdb[i,3] <- details$Genre
+  omdb[i,4] <- details$Actors
+  omdb[i,5] <- parse_number(details$Metascore)
+  omdb[i,6] <- parse_number(details$imdbRating)
+  omdb[i,7] <- parse_number(details$BoxOffice)   # no $ and ,'s
+}
+
+omdb
+
+#  could use stringr functions to further organize this data - separate 
+#    different genres, different actors, etc.
+```
+
+
+### On Your Own (continued)
+
+4. (Based on final project by Mary Wu and Jenna Graff, MSCS 264, Spring 2024).  Start with a small data set on 56 national parks from [kaggle](https://www.kaggle.com/datasets/nationalparkservice/park-biodiversity), and supplement with columns for the park address (a single column including address, city, state, and zip code) and a list of available activities (a single character column with activities separated by commas) from the park websites themselves.
+
+Preliminaries:
+
+- Request API [here](https://www.nps.gov/subjects/developer/get-started.htm)
+- Check out [API guide](https://www.nps.gov/subjects/developer/guides.htm)
+
+```{r}
+np_kaggle <- read_csv("/Users/bethsenf/SDS264/Data/parks.csv")
+
+park_code <- np_kaggle |>
+  select(`Park Code`) |>
+  rename(park_code = `Park Code`)
+
+
+myapikey <- ("WzFlqBnQFWyrKDEVUh7bJs4JGyZtvbCeBnUFwyzz")
+
+url1 <- str_c("https://developer.nps.gov/api/v1/parks?parkCode="
+                , park_code[[1]][[1]], "&api_key=", myapikey)
+one_park <- GET(url1)
+details <- content(one_park, "parse")
+parks_address <- tibble(address = character())
+parks_address[1,1] <- str_c(
+  details$data[[1]]$addresses[[1]]$line1, " ",
+  details$data[[1]]$addresses[[1]]$line3, " ",
+  details$data[[1]]$addresses[[1]]$line2, " ",
+  details$data[[1]]$addresses[[1]]$city, " ",
+  details$data[[1]]$addresses[[1]]$stateCode, ", " ,
+  details$data[[1]]$addresses[[1]]$postalCode
+)
+
+for(i in 1:56) {
+  urls <- str_c("https://developer.nps.gov/api/v1/parks?parkCode="
+                , park_code[[1]][[i]], "&api_key=", myapikey)
+  one_park <- GET(urls)
+  details <- content(one_park, "parse")
+  parks_address[i,1] <- str_c(
+    details$data[[1]]$addresses[[1]]$line1, " ",
+    details$data[[1]]$addresses[[1]]$line3, " ",
+    details$data[[1]]$addresses[[1]]$line2, " ",
+    details$data[[1]]$addresses[[1]]$city, " ",
+    details$data[[1]]$addresses[[1]]$stateCode, ", " ,
+    details$data[[1]]$addresses[[1]]$postalCode
+  )
+}
+
+activity_list <- vector()
+for(i in 1:56) { 
+  urls <- str_c("https://developer.nps.gov/api/v1/parks?parkCode=",
+                park_code[[1]][[i]], "&api_key=", myapikey)
+  one_park <- GET(urls)
+  details <- content(one_park, "parsed")
+  activity_list[i] <- details$data[[1]]$activities[[1]]$name
+  for (j in 2:length(details$data[[1]]$activities)) {
+    activity_list[i] <- str_c(activity_list[i], ", ",
+                              details$data[[1]]$activities[[j]]$name)
+  }
+}
+
+activity_list <- as_tibble(activity_list) |>
+  rename(activities = value)
+
+park_data <- bind_cols(park_code, parks_address, activity_list)
+park_data
+```
+
+#08 Table Scraping
+
+```{r}
+#| include: FALSE
+
+library(tidyverse)
+library(stringr)
+library(rvest)
+library(polite)
+library(sf)
+library(maps)
+library(viridis)
+library(leaflet)
+library(htmltools)
+
+```
+
+### On Your Own 
+
+1. Use the `rvest` package and `html_table` to read in the table of data found at the link [here](https://en.wikipedia.org/wiki/List_of_United_States_cities_by_population) and create a scatterplot of land area versus the 2022 estimated population.  I give you some starter code below; fill in the "???" and be sure you can explain what EVERY line of code does and why it's necessary.
+
+```{r}
+#| eval: FALSE
+
+city_pop <- read_html("https://en.wikipedia.org/wiki/List_of_United_States_cities_by_population")
+
+pop <- html_nodes(city_pop, css = "table")
+html_table(pop, header = TRUE, fill = TRUE) # find right table
+pop2 <- html_table(pop, header = TRUE, fill = TRUE)[[3]]
+pop2
+
+# perform the steps above with the polite package
+session <- bow("https://en.wikipedia.org/wiki/List_of_United_States_cities_by_population", force = TRUE)
+
+result <- scrape(session) |>
+  html_nodes(css = "table") |>
+  html_table(header = TRUE, fill = TRUE)
+pop2 <- result[[3]]
+pop2
+
+pop3 <- as_tibble(pop2[,c(1:6,8)]) |>
+  slice(-1) |>
+  rename(`State` = `ST`,
+         `Estimate2023` = `2023estimate`,
+         `Census` = `2020census`,
+         `Area` = `2020 land area`,
+         `Density` = `2020 density`) |>
+  mutate(Estimate2023 = parse_number(Estimate2023),
+         Census = parse_number(Census),
+         Change = parse_number(Change),
+         Change = case_when(
+           Census > `Estimate2023` ~ -Change,
+           Census < `Estimate2023` ~ Change),# get rid of % but preserve +/-,
+         Area = parse_number(Area),
+         Density = parse_number(Density)) |>
+  mutate(City = str_replace(City, "\\[.*$", ""))
+pop3
+
+# pick out unusual points
+outliers <- pop3 |> 
+  filter(Estimate2023 > IQR(Estimate2023) | Area > IQR(Area))
+
+# This will work if don't turn variables from chr to dbl, but in that 
+#  case notice how axes are just evenly spaced categorical variables
+ggplot(pop3, aes(x = Area, y = Estimate2023)) +
+  geom_point()  +
+  geom_smooth() +
+  ggrepel::geom_label_repel(data = outliers, aes(label = State))
+```
+
+
+2. We would like to create a tibble with 4 years of data (2001-2004) from the Minnesota Wild hockey team.  Specifically, we are interested in the "Scoring Regular Season" table from [this webpage](https://www.hockey-reference.com/teams/MIN/2001.html) and the similar webpages from 2002, 2003, and 2004.  Your final tibble should have 6 columns:  player, year, age, pos (position), gp (games played), and pts (points).
+
+You should (a) write a function called `hockey_stats` with inputs for team and year to scrape data from the "scoring Regular Season" table, and (b) use iteration techniques to scrape and combine 4 years worth of data.  Here are some functions you might consider:
+
+- `row_to_names(row_number = 1)` from the `janitor` package
+- `clean_names()` also from the `janitor` package
+- `bow()` and `scrape()` from the `polite` package
+- `str_c()` from the `stringr` package (for creating urls with user inputs)
+- `map2()` and `list_rbind()` for iterating and combining years
+
+Try following these steps:
+
+1) Be sure you can find and clean the correct table from the 2001 season.
+
+```{r}
+library(janitor)
+
+hockey_01 <- read_html("https://www.hockey-reference.com/teams/MIN/2001.html")
+
+h01 <- html_nodes(hockey_01, css = "table")
+html_table(h01, header = TRUE, fill = TRUE) # find right table
+h01 <- html_table(h01, header = TRUE, fill = TRUE)[[4]]
+h01
+
+h2001 <- h01 |>
+  row_to_names(row_number = 1) |>
+  clean_names() |>
+  select(2:8) 
+h2001
+```
+
+
+2) Organize your `rvest` code from (1) into functions from the `polite` package.
+
+```{r}
+session_hockey <- bow("https://www.hockey-reference.com/teams/MIN/2001.html", force = TRUE)
+
+result_hockey <- scrape(session_hockey) |>
+  html_nodes(css = "table") |>
+  html_table(header = TRUE, fill = TRUE)
+h01 <- result_hockey[[4]] 
+h01
+
+h2001 <- h01 |>
+  row_to_names(row_number = 1) |>
+  clean_names() |>
+  select(2:8) |>
+  rename("games_played" = "gp",
+         "goals" = "g",
+         "assists" = "a") 
+h2001
+```
+
+3) Place the code from (2) into a function where the user can input a team and year.  You would then adjust the url accordingly and produce a clean table for the user.
+
+```{r}
+hockey_stats <- function(team, year) {
+  url <- str_c("https://www.hockey-reference.com/teams/", team, "/", year, ".html")
+  
+  session <- bow(url, force = TRUE)
+  
+  result <- scrape(session) |>
+    html_nodes(css = "table") |>
+    html_table(header = TRUE, fill = TRUE)
+  h01 <- result [[4]]
+  
+  stats <- h01 |>
+  row_to_names(row_number = 1) |>
+  clean_names() |>
+  select(2:8) |>
+  rename("games_played" = "gp",
+         "goals" = "g",
+         "assists" = "a") 
+  
+  return(stats)
+}
+
+h2001 <- hockey_stats("MIN", "2001")
+h2002 <- hockey_stats("MIN", "2002")
+h2003 <- hockey_stats("MIN", "2003")
+h2004 <- hockey_stats("MIN", "2004")
+```
+
+4) Use `map2` and `list_rbind` to build one data set containing Minnesota Wild data from 2001-2004.
+
+```{r}
+?map2
+?list_rbind
+
+years <- 2001:2004
+
+team <- c("MIN", "MIN", "MIN", "MIN")
+
+stats_01_04 <- map2(team, years, hockey_stats) |>
+  list_rbind(names_to = "year")
+```
+
+#09 Web Scraping
+
+You can download this .qmd file from [here](https://github.com/joeroith/264_spring_2025/blob/main/09_web_scraping.qmd).  Just hit the Download Raw File button.
+
+Credit to Brianna Heggeseth and Leslie Myint from Macalester College for a few of these descriptions and examples.
+
+```{r}
+#| include: FALSE
+
+library(tidyverse)
+library(stringr)
+library(rvest)
+library(polite)
+library(sf)
+library(maps)
+library(viridis)
+library(leaflet)
+library(htmltools)
+
+# Starter step: install SelectorGadget (https://selectorgadget.com/) in your browser
+
+```
+
+## Case Study: NIH News Releases
+
+Our goal is to build a data frame with the article title, publication date, and abstract text for the 50 most recent NIH news releases.  
+
+Head over to the [NIH News Releases page](https://www.nih.gov/news-events/news-releases). Click the Selector Gadget extension icon or bookmark button. As you mouse over the webpage, different parts will be highlighted in orange. Click on the title (but not the live link portion!) of the first news release. You'll notice that the Selector Gadget information in the lower right describes what you clicked on.  (If SelectorGadget ever highlights too much in green, you can click on portions that you do not want to turn them red.)
+
+Scroll through the page to verify that only the information you intend (the description paragraph) is selected. The selector panel shows the CSS selector (`.teaser-title`) and the number of matches for that CSS selector (10). (You may have to be careful with your clicking--there are two overlapping boxes, and clicking on the link of the title can lead to the CSS selector of "a".)
+
+
+**[Pause to Ponder:]** Repeat the process above to find the correct selectors for the following fields. Make sure that each matches 10 results:
+
+- The publication date 
+
+> .date-display-single
+
+- The article abstract paragraph (which will also include the publication date)
+
+> .teaser-description
+
+
+### Retrieving Data Using `rvest` and CSS Selectors
+
+Now that we have identified CSS selectors for the information we need, let's fetch the data using the `rvest` package similarly to our approach in `08_table_scraping.qmd`.
+
+```{r}
+# check that scraping is allowed (Step 0)
+robotstxt::paths_allowed("https://www.nih.gov/news-events/news-releases")
+
+# Step 1: Download the HTML and turn it into an XML file with read_html()
+nih <- read_html("https://www.nih.gov/news-events/news-releases")
+```
+
+Finding the exact node (e.g. ".teaser-title") is the tricky part.  Among all the html code used to produce a webpage, where do you go to grab the content of interest?  This is where SelectorGadget comes to the rescue!
+
+```{r}
+# Step 2: Extract specific nodes with html_nodes()
+title_temp <- html_nodes(nih, ".teaser-title")
+title_temp
+
+# Step 3: Extract content from nodes with html_text(), html_name(), 
+#    html_attrs(), html_children(), html_table(), etc.
+# Usually will still need to do some stringr adjustments
+title_vec <- html_text(title_temp)
+title_vec
+```
+
+You can also write this altogether with a pipe:
+
+```{r}
+robotstxt::paths_allowed("https://www.nih.gov/news-events/news-releases")
+
+read_html("https://www.nih.gov/news-events/news-releases") |>
+  html_nodes(".teaser-title") |>
+  html_text()
+```
+
+And finally we wrap the 4 steps above into the `bow` and `scrape` functions from the `polite` package:
+
+```{r}
+session <- bow("https://www.nih.gov/news-events/news-releases", force = TRUE)
+
+nih_title <- scrape(session) |>
+  html_nodes(".teaser-title") |>
+  html_text()
+nih_title
+```
+
+
+### Putting multiple columns of data together.
+
+Now repeat the process above to extract the publication date and the abstract.
+
+```{r}
+nih_pubdate <- scrape(session) |>
+  html_nodes(".date-display-single") |>
+  html_text()
+nih_pubdate
+
+nih_description <- scrape(session) |>
+  html_nodes(".teaser-description") |>
+  html_text()
+nih_description
+```
+
+Combine these extracted variables into a single tibble.  Make sure the variables are formatted correctly - e.g. `pubdate` has `date` type, `description` does not contain the `pubdate`, etc.
+
+```{r}
+# use tibble() to put multiple columns together into a tibble
+nih_top10 <- tibble(title = nih_title, 
+                    pubdate = nih_pubdate, 
+                    description = nih_description)
+nih_top10
+
+# now clean the data
+nih_top10 <- nih_top10 |>
+  mutate(pubdate = mdy(pubdate),
+         description = str_trim(str_replace(description, ".*\\n", "")))
+nih_top10
+```
+
+NOW - continue this process to build a tibble with the most recent 50 NIH news releases, which will require that you iterate over 5 webpages!  You should write at least one function, and you will need iteration--use both a `for` loop and appropriate `map_()` functions from `purrr`. Some additional hints:
+
+- Mouse over the page buttons at the very bottom of the news home page to see what the URLs look like.
+- Include `Sys.sleep(2)` in your function to respect the `Crawl-delay: 2` in the NIH `robots.txt` file.
+- Recall that `bind_rows()` from `dplyr` takes a list of data frames and stacks them on top of each other.
+
+**[Pause to Ponder:]** Create a function to scrape a single NIH press release page by filling missing pieces labeled `???`:
+
+```{r}
+#| eval: FALSE
+
+# Helper function to reduce html_nodes() |> html_text() code duplication
+get_text_from_page <- function(page, css_selector) {
+  page |>
+  html_nodes(css_selector) |>
+  html_text()
+}
+
+# Main function to scrape and tidy desired attributes
+scrape_page <- function(url) {
+    Sys.sleep(2)
+    page <- read_html(url)
+    article_titles <- get_text_from_page(page, ".teaser-title")
+    article_dates <- get_text_from_page(page, ".date-display-single")
+    article_dates <- mdy(article_dates)
+    article_description <- get_text_from_page(page, ".teaser-description")
+    article_description <- str_trim(str_replace(article_description, 
+                                                ".*\\n", 
+                                                "")
+                                    )
+    
+    tibble(title = article_titles,
+           pubdate = article_dates,
+           description = article_description
+    )
+}
+
+scrape_page("https://www.nih.gov/news-events/news-releases")
+```
+
+
+**[Pause to Ponder:]** Use a for loop over the first 5 pages:
+
+```{r}
+#| eval: FALSE
+
+pages <- vector("list", length = 6)
+pos <- 0
+
+for (i in 2025:2024) {
+  for (j in 0:2) {
+    pos <- pos + 1
+     url <- str_c("https://www.nih.gov/news-events/news-releases?", i, "&page=", j, "&1=")
+     pages[[pos]] <- scrape_page(url)
+  }
+}
+
+df_articles <- bind_rows(pages)
+head(df_articles)
+```
+
+
+**[Pause to Ponder:]** Use map functions in the purrr package:
+
+```{r}
+#| eval: FALSE
+
+# Create a character vector of URLs for the first 5 pages
+base_url <- "https://www.nih.gov/news-events/news-releases?page="
+urls_all_pages <- c(base_url, str_c(base_url, 0:4))
+
+pages2 <- purrr::map(urls_all_pages, scrape_page)
+df_articles2 <- bind_rows(pages2)
+head(df_articles2)
+```
+
+## On Your Own
+
+1. Go to https://www.bestplaces.net and search for Minneapolis, Minnesota.  This is a site some people use when comparing cities they might consider working in and/or moving to.  Using SelectorGadget, extract the following pieces of information from the Minneapolis page:
+
+- property crime (on a scale from 0 to 100)
+- minimum income required for a single person to live comfortably
+- average monthly rent for a 2-bedroom apartment
+- the "about" paragraph (the very first paragraph above "Location Details")
+
+```{r}
+session <- bow("https://www.bestplaces.net/city/minnesota/minneapolis", force = TRUE)
+
+crime <- scrape(session) |>
+  html_nodes(".col-4 > div:nth-child(1)") |>
+  html_text()
+crime
+
+min_income <- scrape(session) |>
+  html_nodes(".text-center+ .text-center div:nth-child(1)") |>
+  html_text()
+min_income
+
+month_rent <- scrape(session) |>
+  html_nodes(".col-3~ .col-3+ .col-3 .mb-2") |>
+  html_text()
+month_rent
+
+about <- scrape(session) |>
+  html_nodes(".ms-3:nth-child(3)") |>
+  html_text()
+about
+```
+
+
+2. Write a function called `scrape_bestplaces()` with arguments for `state` and `city`.  When you run, for example, `scrape_bestplaces("minnesota", "minneapolis")`, the output should be a 1 x 6 tibble with columns for `state`, `city`, `crime`, `min_income_single`, `rent_2br`, and `about`.
+
+```{r}
+scrape_bestplaces <- function(state, city) {
+ 
+    url <- str_c("https://www.bestplaces.net/city/", state, "/", city)
+    
+    session <- bow(url, force = TRUE)
+    
+   crime <- scrape(session) |>
+     html_nodes(".col-4 > div:nth-child(1)") |>
+     html_text()
+
+   
+   min_income <- scrape(session) |>
+     html_nodes(".text-center+ .text-center div:nth-child(1)") |>
+     html_text()
+   
+   month_rent <- scrape(session) |>
+     html_nodes(".col-3~ .col-3+ .col-3 .mb-2") |>
+     html_text()
+   
+   about <- scrape(session) |>
+     html_nodes(".ms-3:nth-child(3)") |>
+     html_text()
+    
+    tibble(state = state,
+           city = city,
+           crime = crime,
+           min_income_single = min_income,
+           rent_2br = month_rent,
+           about = about
+    )
+}
+
+scrape_bestplaces("minnesota", "minneapolis")
+```
+
+3. Create a 5 x 6 tibble by running `scrape_bestplaces()` 5 times with 5 cities you are interested in.  You might have to combine tibbles using `bind_rows()`.  Be sure you look at the URL at bestplaces.net for the various cities to make sure it works as you expect.  For bonus points, create the same 5 x 6 tibble for the same 5 cities using `purrr:map2`!
+
+```{r}
+austin <- scrape_bestplaces("texas", "austin")
+washington <- scrape_bestplaces("district_of_columbia", "washington")
+boston <- scrape_bestplaces("massachusetts", "boston")
+chicago <- scrape_bestplaces("illinois", "chicago")
+seattle <- scrape_bestplaces("washington", "seattle")
+
+five_best_cities <- bind_rows(austin, washington, boston, chicago, seattle)
+```
+
+```{r}
+states <- c("texas", "district_of_columbia", "massachusetts", "illinois", "washington")
+
+cities <- c("austin", "washington", "boston", "chicago", "seattle")
+
+five_cities <- map2(states, cities, scrape_bestplaces) |>
+  list_rbind()
+```
+
+

@@ -1,0 +1,12 @@
+name: 01_mini_project_interactive_maps
+title: 01_mini_project_interactive_maps
+username: senf2
+account: senf2
+server: rconnect.stolaf.edu
+hostUrl: https://rconnect.stolaf.edu/__api__
+appId: 836
+bundleId: 2233
+url: https://rconnect.stolaf.edu/content/f91bfa8e-0407-45c9-bad7-a220df12fe7a/
+version: 1
+asMultiple: FALSE
+asStatic: TRUE
