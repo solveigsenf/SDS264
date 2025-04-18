@@ -14,6 +14,7 @@ editor_options:
 ---
 
 ```{r}
+#required packages
 library(tidyverse)
 library(gapminder)
 library(gganimate)
@@ -26,6 +27,7 @@ library(janeaustenr)
 library(wordcloud)
 library(RColorBrewer)
 
+#text data
 all_austen <- austen_books() |>
   group_by(book) |>
   mutate(
@@ -41,6 +43,7 @@ tidy_austen <- all_austen |>
   unnest_tokens(output = "word", input = text) |>
   filter(chapter > 0)
 
+#just the words from the book "Emma"
 emma_words <- tidy_austen |>
   anti_join(stop_words, by = c("word" = "word")) |>
   count(book, word, name = "freq") |>
@@ -51,7 +54,7 @@ emma_words <- tidy_austen |>
   rename("words" = "word") |>
   select(-book)
 
-par(bg = "white")
+par(bg = "white") #background to white
 ```
 
 ## Why Word Clouds?
@@ -116,7 +119,7 @@ emma_words <- tidy_austen |>
   filter(book == "Emma") |>
   slice_max(order_by = freq, n = 200, with_ties = FALSE) |>
   mutate(freq = as.numeric(freq),
-         freq = freq/10) |>
+         freq = freq/10) |> 
   rename("words" = "word") |>
   select(-book)
 ```
