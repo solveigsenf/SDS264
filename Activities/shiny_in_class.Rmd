@@ -1,0 +1,99 @@
+---
+title: "Shiny: Example"
+runtime: shiny
+output: flexdashboard::flex_dashboard
+
+---
+
+```{r setup, include=FALSE, message=FALSE}
+library(tidyverse)
+library(palmerpenguins)
+
+penguins <- penguins
+```
+
+Body Mass Correlations
+==========================
+
+Column 
+-------------------------
+
+```{r, echo=FALSE}
+titlePanel("")
+
+inputPanel(
+  selectInput("x1", label = "x-axis variable:",
+    choices = c("Bill Length (mm)" = "bill_length_mm",
+                "Bill Depth (mm)" = "bill_depth_mm",
+                "Flipper Length (mm)" = "flipper_length_mm"))
+)
+```
+
+```{r, echo=FALSE}
+titlePanel("")
+
+inputPanel(
+  selectInput("x2", label = "x-axis variable:",
+    choices = c("Bill Length (mm)" = "bill_length_mm",
+                "Bill Depth (mm)" = "bill_depth_mm",
+                "Flipper Length (mm)" = "flipper_length_mm")),
+  checkboxInput("type_check2","Color by species?",value=FALSE)
+)
+```
+
+Column {.tabset}
+-------------------------
+
+###Chart 1
+
+```{r}
+renderPlot(ggplot(penguins, aes(x = .data[[input$x1]], y = body_mass_g, 
+                                    color = species)) +   
+          scale_color_manual(values=c("orange","blue","magenta")) + 
+          geom_point(size = 1, alpha = 1))
+```
+
+###Chart 3
+
+```{r}
+renderPlot({
+     if (input$type_check2) 
+        ggplot(penguins, aes(x = .data[[input$x2]], y = body_mass_g, 
+                                    color = species)) +   
+          scale_color_manual(values=c("orange","blue","magenta")) + 
+          geom_point(size = 0.9, alpha = 1) 
+     else if (!input$type_check2)      
+        ggplot(penguins, aes(x = .data[[input$x2]], y = body_mass_g)) +   
+          scale_color_manual(values=c("orange","blue","magenta")) + 
+          geom_point(size = 0.9, alpha = 1)
+})
+```
+
+Body Mass & Flipper Length
+==========================
+
+Inputs {.sidebar}
+-------------------------
+
+```{r, echo=FALSE}
+inputPanel(
+  selectInput("method", label = "Geom smooth Method:",
+    choices = c("'lm'" = "lm",
+                "'glm'" = "glm",
+                "'loess'" = "loess"))
+)
+```
+
+Column 
+-------------------------
+
+```{r}
+renderPlot(ggplot(penguins, aes(x = body_mass_g, y = flipper_length_mm)) +   
+          scale_color_manual(values=c("orange","blue","magenta")) + 
+          geom_point(aes(color = species), size = 1, alpha = 1) +
+          geom_smooth(method = input$method))
+
+```
+
+
+
