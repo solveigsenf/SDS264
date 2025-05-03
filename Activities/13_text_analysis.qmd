@@ -666,11 +666,13 @@ The `potter_untidy` dataset includes the text of 7 books of the Harry Potter ser
 ```{r}
 #| include: FALSE
 
+library(readr)
+library(RCurl)
+
 # potter_untidy <- read_csv("https://joeroith.github.io/264_spring_2025/Data/potter_untidy.csv") |>
 # potter_untidy <- read_csv("Data/potter_untidy.csv")
 
-potter_untidy <- read_csv(
-  file = getURL("https://raw.githubusercontent.com/joeroith/264_spring_2025/refs/heads/main/Data/potter_untidy.csv", .encoding = "UTF-8")) |>
+potter_untidy <- read_csv(getURL("https://raw.githubusercontent.com/joeroith/264_spring_2025/refs/heads/main/Data/potter_untidy.csv", .encoding = "UTF-8")) |>
   mutate(title = fct_reorder(title, book_num))
 
 potter_untidy
@@ -771,7 +773,6 @@ potter_tidy |>
 
 ```
 
-
 ## New stuff!
 
 1. What words contribute the most to negative and positive sentiment scores?  Show a faceted bar plot of the top 10 negative and the top 10 positive words (according to the "bing" lexicon) across the entire series.
@@ -833,17 +834,17 @@ bing_potter <- potter_tidy |>
   count(sentiment, word, sort = TRUE) |>
   group_by(sentiment) |>
   slice_max(n, n = 10) |>
-  mutate(color = sentiment, c("negative" = "red", "positive" = "yellow"))
+  mutate(color = ifelse(sentiment == "negative", "red", "green"),
+         n = n/max(n))
 
 wordcloud(
   words = bing_potter$word, 
   freq = bing_potter$n, 
-  max.words = 200, 
+  max.words = 100, 
   random.order = FALSE, 
   rot.per = 0.35,
-  scale = c(3.5, 0.25),
-  colors = bing_potter$sentiment)
-
+  scale = c(4, 0.25),
+  colors = bing_potter$color)
 ```
 
 5. Make a faceted bar chart to compare the positive/negative sentiment trajectory over the 7 Harry Potter books.  You should have one bar per chapter (thus chapter becomes the index), and the bar should extend up from 0 if there are more positive than negative words in a chapter (according to the "bing" lexicon), and it will extend down from 0 if there are more negative than positive words.
@@ -980,47 +981,35 @@ negated_words_potter |>
 10. Select a set of 4 "interesting" terms and then use the Phi coefficient to find and plot the 6 words most correlated with each of your "interesting" words.  Start by dividing `potter_tidy` into 80-word sections and then remove names and spells and stop words.
 
 ```{r}
-potter_names_long <- potter_names |>
-  pivot_longer(cols = ends_with("tname"),
-               names_to = "type",
-               values_to = "name")
-
-potter_section_words <- potter_untidy |>
-  select(-book_num, -chapter) |>
-  mutate(section = row_number() %/% 80) |> 
-  filter(section > 0) |>
-  unnest_tokens(word, text) |> 
+ potter_section_words <- potter_tidy |>
+  mutate(section = row_number() %/% 80) |>
   filter(!word %in% stop_words$word,
-         !is.na(word)) |>
-  anti_join(potter_spells, by = c("word" = "spell")) |>
-  anti_join(potter_names_long, by = c("word" = "name"))
+         !word %in% potter_names_long$name,
+         !word %in% potter_spells$spell)
 
 potter_section_words 
 
+# count words co-occuring within sections
 library(widyr)
-```
+word_pairs <- potter_section_words |>
+  pairwise_count(word, section, sort = TRUE)
 
-We can quantify pairwise correlation using the Phi coefficient (which simplifies to the Pearson correlation coefficient with numeric data).  The Phi coefficient measures how often two words appear together relative to how often they appear separately (so we don't just pick up the most common words).
+word_pairs
+```
 
 ```{r}
 # we need to filter for at least relatively common words first
 word_cors <- potter_section_words |>
   group_by(word) |>
-  filter(n() >= 5) |>
+  filter(n() >= 10) |>
   pairwise_cor(word, section, sort = TRUE)
 
 word_cors
-
-# What words are most correlated with "life"?
-word_cors |>
-  filter(item1 == "happy")
 ```
-
-Plot words most associated with a set of interesting words:
 
 ```{r}
 word_cors |>
-  filter(item1 %in% c("life", "death", "father", "eyes")) |>
+  filter(item1 %in% c("love", "light", "dark", "evil")) |>
   group_by(item1) |>
   slice_max(correlation, n = 6) |>
   ungroup() |>
@@ -1033,5 +1022,88 @@ word_cors |>
 
 11. Create a network graph to visualize the correlations and clusters of words that were found by the `widyr` package in (10).
 
+```{r}
+set.seed(2016)
+
+library(ggraph)
+library(igraph)
+
+word_cors |>
+  filter(correlation > .3) |>
+  graph_from_data_frame() |>
+  ggraph(layout = "fr") +
+    geom_edge_link(aes(edge_alpha = correlation), show.legend = FALSE) +
+    geom_node_point(color = "lightblue", size = 5) +
+    geom_node_text(aes(label = name), repel = TRUE) +
+    theme_void()
+```
 
 12. Use LDA to fit a 2-topic model to all 7 Harry Potter books.  Be sure to remove names, spells, and stop words before running your topic models.  (a) Make a plot to illustrate words with greatest difference between two topics, using log ratio.  (b) Print a table with the gamma variable for each document and topic.  Based on (a) and (b), can you interpret what the two topics represent?
+
+```{r}
+book_words_potter <- potter_untidy |>
+  group_by(title) |>
+  mutate(linenumber = row_number()) |>
+  ungroup() |>
+  unnest_tokens(word, text) 
+  
+book_word_count_potter <- book_words_potter |>
+  count(word, title, sort = TRUE)
+
+book_word_count_potter
+```
+
+```{r}
+library(tm)
+potter_books_dtm <- book_word_count_potter |>
+  filter(!word %in% stop_words$word,
+         !word %in% potter_names_long$name,
+         !word %in% potter_spells$spell) |>
+  cast_dtm(title, word, n)
+
+library(topicmodels)
+potter_books_lda <- LDA(potter_books_dtm, k = 2, control = list(seed = 1234))
+potter_books_lda
+```
+
+```{r}
+potter_books_topics <- tidy(potter_books_lda, matrix = "beta")
+potter_books_topics
+
+# Find the most common words within each topic
+potter_books_top_terms <- potter_books_topics |>
+  group_by(topic) |>
+  slice_max(beta, n = 10) |> 
+  ungroup() |>
+  arrange(topic, -beta)
+
+potter_books_top_terms |>
+  mutate(term = reorder_within(term, beta, topic)) |>
+  ggplot(aes(beta, term, fill = factor(topic))) +
+    geom_col(show.legend = FALSE) +
+    facet_wrap(~ topic, scales = "free") +
+    scale_y_reordered()
+
+beta_wide_potter <- potter_books_topics |>
+  mutate(topic = paste0("topic", topic)) |>
+  pivot_wider(names_from = topic, values_from = beta) |> 
+  filter(topic1 > .001 | topic2 > .001) |>
+  mutate(log_ratio = log2(topic2 / topic1))
+
+beta_wide_potter
+
+beta_wide_potter |>
+  arrange(desc(abs(log_ratio))) |>
+  slice_max(abs(log_ratio), n = 20) |>
+  mutate(term = reorder(term, log_ratio)) |>
+  ggplot(aes(log_ratio, term, fill = log_ratio > 0)) +
+    geom_col(show.legend = FALSE) +
+    labs(x = "Log ratio of Beta values",
+         y = "Words in Harry Potter books")
+
+potter_books_documents <- tidy(potter_books_lda, matrix = "gamma")
+potter_books_documents
+
+#Prisoner of Azkaban and Deathly Hallows vs Sorcerer's Stone, Chamber of Secrets, Goblet of Fire, Order of the Phoenix, and Half-Blood Prince? It just divided the 7 books into two groups based on similarity? 
+```
+
