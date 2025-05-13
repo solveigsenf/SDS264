@@ -1,0 +1,221 @@
+---
+title: "SQL: Exercises"
+format:
+  pdf: default
+execute:
+  echo: true
+  warning: false
+  message: false
+editor_options:
+  chunk_output_type: inline
+---
+  
+You can download this .qmd file from [here](https://github.com/joeroith/264_spring_2025/blob/main/SQL_code/16_SQL_exercises.qmd).  Just hit the Download Raw File button.
+
+The code in [15_SQL.qmd](https://github.com/joeroith/264_spring_2025/blob/main/SQL_code/15_SQL.qmd) walked us through many of the examples in MDSR Chapter 15; now, we present a set of practice exercises in converting from the tidyverse to SQL.
+
+```{r}
+#| message: false
+#| warning: false
+
+library(tidyverse)
+library(mdsr)
+library(dbplyr)
+library(DBI)
+```
+
+```{r}
+# connect to the database which lives on a remote server maintained by
+#   St. Olaf's IT department
+
+library(RMariaDB)
+con <- dbConnect(
+  MariaDB(), host = "mdb.stolaf.edu",
+  user = "ruser", password = "ruserpass", 
+  dbname = "flight_data"
+)
+```
+
+
+## On Your Own - Adapting 164 Code
+
+These problems are based on class exercises from SDS 164, so you've already solved them in R!  Now we're going to try to duplicate those solutions in SQL (but with 2023 data instead of 2013).
+
+```{r}
+# Read in 2013 NYC flights data
+library(nycflights13)
+flights_nyc13 <- nycflights13::flights
+planes_nyc13 <- nycflights13::planes
+```
+
+
+1. Summarize carriers flying to MSP by number of flights and proportion that are cancelled (assuming that a missing arrival time indicates a cancelled flight).  [This was #4 in 17_longer_pipelines.Rmd.]
+
+```{r}
+# Original solution from SDS 164
+flights_nyc13 |>
+  mutate(carrier = fct_collapse(carrier, "Delta +" = c("DL", "9E"), 
+                                      "American +"= c("AA", "MQ"), 
+                                     "United +" = c("EV", "OO", "UA"))) |>
+  filter(dest == "MSP") |>   
+  group_by(origin, carrier) |>
+  summarize(n_flights = n(), 
+            num_cancelled = sum(is.na(arr_time)),
+            prop_cancelled = mean(is.na(arr_time)))
+```
+
+First duplicate the output above, then check trends in 2023 across all origins.  Here are a few hints:
+
+- use flightdata instead of flights_nyc13
+- remember that flights_nyc13 only contained 2013 and 3 NYC origin airports (EWR, JFK, LGA)
+- is.na can be replaced with CASE WHEN ArrTime IS NULL THEN 1 ELSE 0 END or with CASE WHEN cancelled = 1 THEN 1 ELSE 0 END
+- CASE WHEN can also be used replace fct_collapse
+
+```{r}
+flights_23 <- dbGetQuery(con,  
+'SELECT 
+  origin, 
+  COUNT(*) AS numflights,
+  SUM(CASE WHEN ArrTime IS NULL THEN 1 ELSE 0 END) AS num_cancelled,
+  SUM(CASE WHEN ArrTime IS NULL THEN 1 ELSE 0 END) / COUNT(*) AS prop_cancelled, 
+  CASE WHEN Reporting_Airline IN (\'DL\', \'9E\') THEN \'delta+\' WHEN Reporting_Airline IN (\'AA\', \'MQ\') THEN \'American +\' ELSE \'United +\' END AS carrier_type
+FROM flightdata AS o
+WHERE year = 2023 AND origin IN (\'JFK\', \'EWR\', \'LGA\')
+GROUP BY origin, carrier_type
+LIMIT 0, 30')
+```
+
+```{r}
+flights_23_all <- dbGetQuery(con,  
+'SELECT 
+  origin, 
+  COUNT(*) AS numflights,
+  SUM(CASE WHEN ArrTime IS NULL THEN 1 ELSE 0 END) AS num_cancelled,
+  SUM(CASE WHEN ArrTime IS NULL THEN 1 ELSE 0 END) / COUNT(*) AS prop_cancelled, 
+  CASE WHEN Reporting_Airline IN (\'DL\', \'9E\') THEN \'delta+\' WHEN Reporting_Airline IN (\'AA\', \'MQ\') THEN \'American +\' ELSE \'United +\' END AS carrier_type
+FROM flightdata AS o
+WHERE year = 2023
+GROUP BY origin, carrier_type
+LIMIT 0, 30')
+```
+
+
+2. Plot number of flights vs. proportion cancelled for every origin-destination pair (assuming that a missing arrival time indicates a cancelled flight).  [This was #7 in 17_longer_pipelines.Rmd.]
+
+```{r}
+# Original solution from SDS 164
+flights_nyc13 |>
+  group_by(origin, dest) |>
+  summarize(n = n(),
+            prop_cancelled = mean(is.na(arr_time))) |>
+  filter(prop_cancelled < 1) |>
+  ggplot(aes(n, prop_cancelled)) + 
+  geom_point()
+```
+
+First duplicate the plot above for 2023 data, then check trends across all origins.  Do all of the data wrangling in SQL.  Here are a few hints:
+
+- use flightdata instead of flights_nyc13
+- remember that flights_nyc13 only contained 2013 and 3 NYC origin airports (EWR, JFK, LGA)
+- use an `sql` chunk and an `r` chunk
+- include `connection = ` and `output.var = ` in your sql chunk header (this doesn't seem to work with dbGetQuery()...)
+
+```{sql, connection = con, output.var = "flights_cancelled"}
+SELECT 
+  origin, 
+  dest,
+  COUNT(*) AS numflights,
+  SUM(CASE WHEN ArrTime IS NULL THEN 1 ELSE 0 END) AS num_cancelled,
+  SUM(CASE WHEN ArrTime IS NULL THEN 1 ELSE 0 END) / COUNT(*) AS prop_cancelled
+FROM flightdata AS o
+WHERE year = 2023 AND origin IN ('JFK', 'EWR', 'LGA') 
+GROUP BY origin, dest
+HAVING prop_cancelled > 0
+LIMIT 0, 300
+```
+
+```{r}
+flights_cancelled
+
+ggplot(flights_cancelled, aes(x = numflights, prop_cancelled)) + 
+  geom_point()
+```
+
+```{sql, connection = con, output.var = "flights_cancelled_all"}
+SELECT 
+  origin, 
+  dest,
+  COUNT(*) AS numflights,
+  SUM(CASE WHEN ArrTime IS NULL THEN 1 ELSE 0 END) AS num_cancelled,
+  SUM(CASE WHEN ArrTime IS NULL THEN 1 ELSE 0 END) / COUNT(*) AS prop_cancelled
+FROM flightdata AS o
+WHERE year = 2023
+GROUP BY origin, dest
+HAVING prop_cancelled > 0
+LIMIT 0, 500
+```
+
+```{r}
+flights_cancelled_all
+
+ggplot(flights_cancelled_all, aes(x = numflights, prop_cancelled)) + 
+  geom_point()
+```
+
+3. Produce a table of weighted plane age by carrier, where weights are based on number of flights per plane.  [This was #6 in 26_more_joins.Rmd.]
+
+```{r}
+# Original solution from SDS 164
+flights_nyc13 |>
+  left_join(planes_nyc13, join_by(tailnum)) |>
+  mutate(plane_age = 2013 - year.y) |>
+  group_by(carrier) |>
+  summarize(unique_planes = n_distinct(tailnum),
+            mean_weighted_age = mean(plane_age, na.rm =TRUE),
+            sd_weighted_age = sd(plane_age, na.rm =TRUE)) |>
+  arrange(mean_weighted_age)
+```
+
+First duplicate the output above for 2023, then check trends across all origins.  Do all of the data wrangling in SQL.  Here are a few hints:
+
+- use flightdata instead of flights_nyc13
+- remember that flights_nyc13 only contained 2013 and 3 NYC origin airports (EWR, JFK, LGA)
+- you'll have to merge the flights dataset with the planes dataset
+- you can use DISTINCT inside a COUNT()
+- investigate SQL clauses for calculating a standard deviation
+- you cannot use a derived variable inside a summary clause in SELECT
+
+For bonus points, also merge the airlines dataset and include the name of each carrier and not just the abbreviation!
+
+```{sql, connection = con, output.var = "plane_age"}
+SELECT 
+  o.Reporting_Airline AS carrier,
+  COUNT(DISTINCT o.TAIL_NUMBER) AS unique_planes,
+  AVG(2023 - a.year) AS mean_plane_age,
+  STDDEV(2023 - a.year) AS sd_plane_age
+FROM flightdata AS o
+LEFT JOIN planes AS a ON o.TAIL_NUMBER = a.tailnum
+WHERE o.year = 2023 AND origin IN ('JFK', 'EWR', 'LGA') 
+GROUP BY carrier
+ORDER BY mean_plane_age
+LIMIT 0, 10
+```
+
+```{sql, connection = con, output.var = "plane_age_all"}
+SELECT 
+  o.Reporting_Airline AS carrier,
+  COUNT(DISTINCT o.TAIL_NUMBER) AS unique_planes,
+  AVG(2023 - a.year) AS mean_plane_age,
+  STDDEV(2023 - a.year) AS sd_plane_age
+FROM flightdata AS o
+LEFT JOIN planes AS a ON o.TAIL_NUMBER = a.tailnum
+WHERE o.year = 2023 
+GROUP BY carrier
+ORDER BY mean_plane_age
+LIMIT 0, 10
+```
+
+```{r}
+dbDisconnect(con)
+```
+

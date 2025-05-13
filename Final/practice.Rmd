@@ -1,0 +1,70 @@
+---
+title: "final_practice"
+author: "Solveig Senf"
+date: "2025-05-06"
+output: html_document
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+library(AER)
+library(tidyverse)
+library(stringr)
+library(rvest)
+library(polite)
+library(sf)
+library(maps)
+library(viridis)
+library(leaflet)
+library(htmltools)
+library(readr)
+library(DT)
+
+robotstxt::paths_allowed("https://www.niche.com/colleges/search/best-colleges/")
+
+session <- bow("https://www.niche.com/colleges/carleton-college/majors/", force = TRUE)
+
+top_majors <- scrape(session) |>
+  html_nodes(".popular-entity__name") |>
+  html_text()
+top_majors
+
+
+college_data <- read_csv("~/Downloads/hd2023.csv") |>
+  filter(STABBR == "MN") |>
+  select(college = INSTNM) 
+
+college_for_majors <- college_data |>
+  mutate(college = str_to_lower(college),
+         college = str_replace_all(college, "-", " "),
+         college = str_replace_all(college, " ", "-"))
+```
+
+```{r, echo=FALSE}
+titlePanel("")
+
+ui <- fluidPage(
+  titlePanel("Top 10 Majors by College"),
+  inputPanel(
+    selectInput("college", label = "college name",
+                          choices = college_for_majors$college)),
+  DTOutput("D")
+)
+
+scrape_majors <- function(input, output) {
+ observeEvent(input$college, {
+    url <- str_c("https://www.niche.com/colleges/", input$college, "/majors/")
+    
+    session <- bow(url, force = TRUE)
+    
+   top_majors <- scrape(session) |>
+     html_nodes(".popular-entity__name") |>
+     html_text()
+    
+    output$D <- renderDataTable({tibble(college = input$college, top_majors = top_majors)})
+ })
+}
+
+shinyApp(ui = ui, server = scrape_majors)
+```
+

@@ -142,7 +142,7 @@ str_c("I can put other values, like", x, "in here!", sep = " ")
 spot_smaller
 
 song_count <- spot_smaller |> 
-  count(artist) |>
+  (artist) |>
   slice_max(n, n = 1)
 
 song_count

@@ -284,7 +284,8 @@ str_view(stringr::words, "^[^aeiou]{3}.*([aeiou]{2,})")
 ## Useful functions for handling patterns
 
 str_extract() : extract a string that matches a pattern
-str_count() : count how many times a pattern occurs within a string
+str_
+() : count how many times a pattern occurs within a string
 
 
 ```{r}

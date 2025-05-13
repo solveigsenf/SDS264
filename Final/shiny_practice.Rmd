@@ -1,0 +1,63 @@
+---
+title: "shiny_practice"
+author: "Solveig Senf"
+date: "2025-05-12"
+output: html_document
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(stringr)
+library(rvest)
+library(polite)
+library(sf)
+library(maps)
+library(viridis)
+library(leaflet)
+library(htmltools)
+library(readr)
+library(ggplot2)
+library(ggthemes)
+library(ggrepel)
+library(plotly)
+```
+
+# Tuition by size
+
+```{r, echo=FALSE, warning=FALSE}
+inputPanel(
+  checkboxInput("type_check", "Color by Institution Type?", value = FALSE)
+)
+
+tuition_by_size <- mn_college_data |>
+  select(size_type, in_state_tuition, public_private) |>
+  filter(!is.na(in_state_tuition), in_state_tuition != ".") |>
+  group_by(size_type, public_private) |>
+  mutate(in_state_tuition = as.numeric(in_state_tuition),
+         size_type = as.factor(size_type),
+         public_private = as.factor(public_private),
+         size_type = fct_recode(size_type, 
+                                "< 1,000" = "1",
+                                "1,000 - 4,999" = "2",
+                                "5,000 - 9,999" = "3",
+                                "10,000 - 19,999" = "4",
+                                "20,000 +" = "5"),
+         public_private = fct_recode(public_private,
+                                     "Public" = "1",
+                                     "Private (not-for-profit)" = "2",
+                                     "Private (for-profit)" = "3")) |>
+  summarize(mean_tuition = mean(in_state_tuition)) 
+
+  ggplot(aes(x = size_type, y = mean_tuition, fill = public_private)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Average Tuition by Institution Size",
+       subtitle = "Colored by Institution Type",
+       x = "Size",
+       y = "Average Tuition",
+       fill = "Type") +
+  theme_classic() +
+  scale_fill_colorblind()
+```

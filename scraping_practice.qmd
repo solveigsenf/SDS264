@@ -1,0 +1,64 @@
+---
+title: "College Data Scraping"
+format:
+  html: default
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+#| include: FALSE
+
+library(tidyverse)
+library(stringr)
+library(rvest)
+library(polite)
+library(sf)
+library(maps)
+library(viridis)
+library(leaflet)
+library(htmltools)
+library(readr)
+
+```
+
+
+```{r}
+robotstxt::paths_allowed("https://www.niche.com/colleges/search/best-colleges/")
+
+session <- bow("https://www.niche.com/colleges/carleton-college/majors/", force = TRUE)
+
+top_majors <- scrape(session) |>
+  html_nodes(".popular-entity__name") |>
+  html_text()
+top_majors
+```
+```{r}
+scrape_majors <- function(college) {
+ 
+    url <- str_c("https://www.niche.com/colleges/", college, "/majors/")
+    
+    session <- bow(url, force = TRUE)
+    
+   top_majors <- scrape(session) |>
+     html_nodes(".popular-entity__name") |>
+     html_text()
+    
+    tibble(college = college,
+           top_majors = top_majors
+    )
+}
+
+scrape_majors("university-of-minnesota-twin-cities")
+```
+```{r}
+college_data <- read_csv("~/Downloads/hd2023.csv") |>
+  filter(STABBR == "MN") |>
+  select(college = INSTNM) 
+
+college_for_majors <- college_data |>
+  mutate(college = str_to_lower(college),
+         college = str_replace_all(college, "-", " "),
+         college = str_replace_all(college, " ", "-"))
+```
+

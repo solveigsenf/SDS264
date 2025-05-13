@@ -1,0 +1,70 @@
+---
+title: "data_tidy"
+format:
+  html: default
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(tidyverse)
+library(stringr)
+library(rvest)
+library(polite)
+library(sf)
+library(maps)
+library(viridis)
+library(leaflet)
+library(htmltools)
+library(readr)
+```
+
+```{r}
+ic <- read_csv("~/Downloads/ic2023.csv") |>
+  select(college_id = UNITID, 
+         study_abroad = SLO6, 
+         room_capacity = ROOMCAP, 
+         ncaa = ASSOC1, 
+         college_ran_housing = ROOM, 
+         meals_per_week = MEALSWK) 
+  
+ic_ay <- read_csv("~/Downloads/ic2023_ay.csv") |>
+  select(college_id = UNITID,
+         in_state_tuition = TUITION2,
+         food_housing_fee = CHG5AY3) 
+
+hd <- read_csv("~/Downloads/hd2023 2.csv") |>
+  select(college_id = UNITID,
+         college_name = INSTNM,
+         city = CITY,
+         state = STABBR,
+         open_or_closed = CYACTIVE,
+         size_type = INSTSIZE,
+         longitude = LONGITUD,
+         latitude = LATITUDE)
+
+effy <- read_csv("~/Downloads/effy2023.csv") |> 
+  select(college_id = UNITID,
+         student_type = EFFYLEV,
+         total_enrollment = EFYTOTLT,
+         total_men = EFYTOTLM,
+         total_women = EFYTOTLW) |>
+  filter(student_type == "2") #filters for undergraduate enrollment numbers 
+```
+
+```{r}
+ic_full <- ic |>
+  left_join(ic_ay)  
+
+ic_hd <- ic_full |>
+  left_join(hd)
+
+college_data <- ic_hd |>
+  left_join(effy)
+
+mn_college_data <- college_data |>
+  filter(state == "MN") |>
+  arrange(college_name)
+```
+
+
