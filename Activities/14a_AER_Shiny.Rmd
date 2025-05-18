@@ -102,3 +102,93 @@ renderPlot({
     geom_boxplot()
 })
 ```
+
+
+```{r, echo = FALSE, include = FALSE}
+#Data Cleaning!
+ic <- read_csv("data/ic2023.csv") |>
+  select(college_id = UNITID, 
+         study_abroad = SLO6, 
+         room_capacity = ROOMCAP, 
+         ncaa = ASSOC1, 
+         college_ran_housing = ROOM, 
+         meals_per_week = MEALSWK) 
+  
+ic_ay <- read_csv("data/ic2023_ay.csv") |>
+  select(college_id = UNITID,
+         in_state_tuition = TUITION2,
+         food_housing_fee = CHG5AY3) 
+
+hd <- read_csv("data/hd2023 2.csv") |>
+  select(college_id = UNITID,
+         college_name = INSTNM,
+         city = CITY,
+         state = STABBR,
+         open_or_closed = CYACTIVE,
+         size_type = INSTSIZE,
+         longitude = LONGITUD,
+         latitude = LATITUDE,
+         public_private = CONTROL)
+
+effy <- read_csv("data/effy2023.csv") |> 
+  select(college_id = UNITID,
+         student_type = EFFYLEV,
+         total_enrollment = EFYTOTLT,
+         total_men = EFYTOTLM,
+         total_women = EFYTOTLW) |>
+  filter(student_type == "2") #filters for undergraduate enrollment numbers 
+
+s <- read_csv("data/s2023_sis.csv") |>
+  select(college_id = UNITID,
+         employment_type = FACSTAT, 
+         total_faculty = SISTOTL) |>
+  filter(employment_type == "10") |> #staff with faculty status
+  select(-employment_type)
+```
+
+```{r, echo = FALSE, include = FALSE}
+#Joining clean data sets
+ic_full <- ic |>
+  left_join(ic_ay)  
+
+ic_hd <- ic_full |>
+  left_join(hd)
+
+college_data <- ic_hd |>
+  left_join(effy)
+
+college_data2 <- college_data |>
+  left_join(s)
+
+mn_college_data <- college_data2 |>
+  filter(state == "MN") |>
+  arrange(college_name)
+```
+
+```{r}
+inputPanel(
+  selectInput("public_private", label = "Public/Private",
+    choices = c("Public" = "Public",
+                "Private ((not-for-profit)" = "Private (not-for-profit)", 
+                "Private (for-profit)" = "Private (for-profit)"))
+)
+
+renderTable({
+  mn_college_data |>
+  select(college_name, public_private) |>
+  filter(public_private != "NA") |>
+  mutate(public_private = as.factor(public_private),
+         public_private = fct_recode(public_private,
+                                     "Public" = "1",
+                                     "Private (not-for-profit)" = "2",
+                                     "Private (for-profit)" = "3")) |>
+    filter(college_type == input$public_private)
+  rename(college_name, "College Name" = "college_name",
+         public_private, "College Type" = "public_private") |>
+  kable()
+})
+
+```
+
+ 
+```
